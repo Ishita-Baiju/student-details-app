@@ -1,80 +1,14 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Student Details App</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 18px; background:#f7fafc; color:#111827 }
-    .card { background:white; padding:16px; border-radius:12px; box-shadow:0 6px 20px rgba(2,6,23,.07); max-width:980px; margin:0 auto }
-    form { display:grid; grid-template-columns: repeat(6, 1fr); gap:10px; }
-    input, select, button { padding:8px; border-radius:8px; border:1px solid #e6edf3 }
-    table { width:100%; border-collapse:collapse; margin-top:12px }
-    th,td { padding:8px; border-bottom:1px solid #eef2f6 }
-    th { text-align:left; background:#f1f5f9 }
-    .right { text-align:right }
-    .muted { font-size:13px; color:#6b7280 }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h2>Student Details</h2>
-    <p class="muted">Add and manage student details here. These records are used by the Student Marks App.</p>
-
-    <form id="studentForm">
-      <div>
-        <label>Roll No</label>
-        <input id="s_rollNo" required />
-      </div>
-      <div>
-        <label>Full Name</label>
-        <input id="s_name" required />
-      </div>
-      <div>
-        <label>Class</label>
-        <input id="s_class" placeholder="e.g. 10A" required />
-      </div>
-      <div>
-        <label>Section</label>
-        <input id="s_section" />
-      </div>
-      <div>
-        <label>DOB</label>
-        <input id="s_dob" type="date" />
-      </div>
-      <div>
-        <label>Parent Contact</label>
-        <input id="s_parent" />
-      </div>
-
-      <div style="grid-column: span 6; display:flex; gap:8px; justify-content:flex-start; margin-top:6px;">
-        <button id="addStudentBtn" type="submit">Add Student</button>
-        <button id="resetStudentBtn" type="button">Reset</button>
-      </div>
-    </form>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Roll No</th>
-          <th>Name</th>
-          <th>Class</th>
-          <th>Section</th>
-          <th>DOB</th>
-          <th>Parent</th>
-          <th class="right">Actions</th>
-        </tr>
-      </thead>
-      <tbody id="studentsTbody"></tbody>
-    </table>
-  </div>
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Marks App</title>
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-    // Use the same Firebase project as your marks app (or replace with another project's config)
     const firebaseConfig = {
       apiKey: "AIzaSyB6lJ0qAoiFY72MKtzcTFCdVBaOv5-vqtA",
       authDomain: "student-marks-app-dc6c3.firebaseapp.com",
@@ -89,112 +23,155 @@
     const db = getFirestore(app);
     const auth = getAuth(app);
 
-    onAuthStateChanged(auth, (u) => {});
-    try { await signInAnonymously(auth); } catch(e){ console.error('auth',e); }
+    // Sign in anonymously
+    signInAnonymously(auth).catch(console.error);
 
-    // UI
-    const form = document.getElementById('studentForm');
-    const s_rollNo = document.getElementById('s_rollNo');
-    const s_name = document.getElementById('s_name');
-    const s_class = document.getElementById('s_class');
-    const s_section = document.getElementById('s_section');
-    const s_dob = document.getElementById('s_dob');
-    const s_parent = document.getElementById('s_parent');
-    const studentsTbody = document.getElementById('studentsTbody');
-    const addStudentBtn = document.getElementById('addStudentBtn');
-    const resetStudentBtn = document.getElementById('resetStudentBtn');
-
-    let students = [];
-    let editStudentId = null;
-
-    function enterEdit(student){
-      editStudentId = student.id;
-      s_rollNo.value = student.rollNo || '';
-      s_name.value = student.name || '';
-      s_class.value = student.studentClass || '';
-      s_section.value = student.section || '';
-      s_dob.value = student.dob || '';
-      s_parent.value = student.parentContact || '';
-      addStudentBtn.textContent = 'Update Student';
-      resetStudentBtn.textContent = 'Cancel Edit';
-      s_rollNo.focus();
-    }
-
-    function exitEdit(){
-      editStudentId = null;
-      form.reset();
-      addStudentBtn.textContent = 'Add Student';
-      resetStudentBtn.textContent = 'Reset';
-      s_rollNo.focus();
-    }
-
-    function renderStudents(){
-      studentsTbody.innerHTML = '';
-      for (const s of students){
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${s.rollNo || ''}</td>
-          <td>${s.name || ''}</td>
-          <td>${s.studentClass || ''}</td>
-          <td>${s.section || ''}</td>
-          <td>${s.dob || ''}</td>
-          <td>${s.parentContact || ''}</td>
-          <td class="right" style="white-space:nowrap;">
-            <button data-action="edit" data-id="${s.id}">Edit</button>
-            <button data-action="delete" data-id="${s.id}">Delete</button>
-          </td>`;
-        studentsTbody.appendChild(tr);
-      }
-    }
-
-    // Listen to students collection
+    const marksCol = collection(db, 'marks');
     const studentsCol = collection(db, 'students');
+
+    const form = document.getElementById('marksForm');
+    const studentSelect = document.getElementById('studentSelect');
+    const rollNo = document.getElementById('rollNo');
+    const nameEl = document.getElementById('name');
+    const studentClass = document.getElementById('studentClass');
+    const subject = document.getElementById('subject');
+    const marks = document.getElementById('marks');
+    const tableBody = document.getElementById('marksTableBody');
+
+    let editingId = null;
+    let students = [];
+
+    // Fetch students live
     onSnapshot(query(studentsCol, orderBy('rollNo')), (snap) => {
       students = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderStudents();
+      populateStudentSelect();
     });
 
-    // Add / Update handler
+    function populateStudentSelect() {
+      studentSelect.innerHTML = '<option value="">-- Select Student --</option>';
+      students.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.rollNo} — ${s.name} (${s.studentClass})`;
+        opt.dataset.roll = s.rollNo;
+        opt.dataset.name = s.name;
+        opt.dataset.class = s.studentClass;
+        studentSelect.appendChild(opt);
+      });
+    }
+
+    studentSelect.addEventListener('change', () => {
+      const id = studentSelect.value;
+      if (!id) return;
+      const opt = studentSelect.selectedOptions[0];
+      rollNo.value = opt.dataset.roll || '';
+      nameEl.value = opt.dataset.name || '';
+      studentClass.value = opt.dataset.class || '';
+    });
+
+    // Add or update marks
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const payload = {
-        rollNo: (s_rollNo.value||'').toString().trim(),
-        name: (s_name.value||'').toString().trim(),
-        studentClass: (s_class.value||'').toString().trim(),
-        section: (s_section.value||'').toString().trim(),
-        dob: s_dob.value || '',
-        parentContact: (s_parent.value||'').toString().trim()
+      const docData = {
+        rollNo: rollNo.value,
+        name: nameEl.value,
+        studentClass: studentClass.value,
+        subject: subject.value,
+        marks: marks.value,
+        studentId: studentSelect.value || null, // link to students collection
+        updatedAt: serverTimestamp(),
+        createdBy: auth.currentUser?.uid || null
       };
 
-      if (!payload.rollNo || !payload.name || !payload.studentClass) { alert('Please fill Roll No, Name and Class'); return; }
-
       try {
-        if (editStudentId) {
-          await updateDoc(doc(db, 'students', editStudentId), { ...payload, updatedAt: serverTimestamp() });
-          exitEdit();
+        if (editingId) {
+          await updateDoc(doc(db, 'marks', editingId), docData);
+          editingId = null;
         } else {
-          await addDoc(studentsCol, { ...payload, createdAt: serverTimestamp() });
-          form.reset();
+          await addDoc(marksCol, { ...docData, createdAt: serverTimestamp() });
         }
-      } catch (err) { console.error(err); alert('Error saving student. Check console.'); }
-    });
-
-    // Reset / Cancel
-    resetStudentBtn.addEventListener('click', () => { if (editStudentId) exitEdit(); else form.reset(); });
-
-    // Row actions
-    studentsTbody.addEventListener('click', async (e) => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
-      const id = btn.dataset.id; const action = btn.dataset.action;
-      if (action === 'delete') {
-        if (confirm('Delete this student?')) {
-          try { await deleteDoc(doc(db, 'students', id)); } catch (err) { console.error(err); alert('Delete failed.'); }
-        }
-      } else if (action === 'edit') {
-        const s = students.find(x => x.id === id); if (s) enterEdit(s);
+        form.reset();
+        studentSelect.value = '';
+      } catch (err) {
+        console.error('Error adding/updating marks:', err);
       }
     });
+
+    // Display marks live
+    onSnapshot(query(marksCol, orderBy('createdAt', 'desc')), (snap) => {
+      tableBody.innerHTML = '';
+      snap.forEach(docSnap => {
+        const d = docSnap.data();
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${d.rollNo}</td>
+          <td>${d.name}</td>
+          <td>${d.studentClass}</td>
+          <td>${d.subject}</td>
+          <td>${d.marks}</td>
+          <td>
+            <button onclick="editMark('${docSnap.id}', '${d.rollNo}', '${d.name}', '${d.studentClass}', '${d.subject}', '${d.marks}', '${d.studentId || ''}')">Edit</button>
+            <button onclick="deleteMark('${docSnap.id}')">Delete</button>
+          </td>`;
+        tableBody.appendChild(tr);
+      });
+    });
+
+    // Expose edit/delete
+    window.editMark = (id, roll, name, cls, subj, mark, sid) => {
+      editingId = id;
+      rollNo.value = roll;
+      nameEl.value = name;
+      studentClass.value = cls;
+      subject.value = subj;
+      marks.value = mark;
+      studentSelect.value = sid || '';
+    };
+
+    window.deleteMark = async (id) => {
+      if (confirm('Delete this record?')) {
+        await deleteDoc(doc(db, 'marks', id));
+      }
+    };
   </script>
+</head>
+<body>
+  <h1>Student Marks App</h1>
+  <form id="marksForm">
+    <label>Select Student:</label>
+    <select id="studentSelect"></select><br>
+
+    <label>Roll No:</label>
+    <input id="rollNo" required><br>
+
+    <label>Name:</label>
+    <input id="name" required><br>
+
+    <label>Class:</label>
+    <input id="studentClass" required><br>
+
+    <label>Subject:</label>
+    <input id="subject" required><br>
+
+    <label>Marks:</label>
+    <input id="marks" required><br>
+
+    <button type="submit">Save Marks</button>
+  </form>
+
+  <h2>Marks List</h2>
+  <table border="1">
+    <thead>
+      <tr>
+        <th>Roll No</th>
+        <th>Name</th>
+        <th>Class</th>
+        <th>Subject</th>
+        <th>Marks</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="marksTableBody"></tbody>
+  </table>
 </body>
 </html>
