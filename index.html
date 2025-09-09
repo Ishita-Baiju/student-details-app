@@ -2,12 +2,54 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Student Marks App</title>
+</head>
+<body>
+  <h1>Student Marks</h1>
+
+  <form id="marksForm">
+    <select id="studentSelect" required></select>
+    <input type="text" id="subject" placeholder="Subject" required>
+    <input type="number" id="marks" placeholder="Marks" required>
+    <button type="submit">Save</button>
+  </form>
+
+  <table border="1" width="100%">
+    <thead>
+      <tr>
+        <th>Roll No</th>
+        <th>Name</th>
+        <th>Class</th>
+        <th>Subject</th>
+        <th>Marks</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="marksList"></tbody>
+  </table>
+
+  <!-- Student Marks Modal -->
+  <div id="marksModal" style="display:none; position:fixed; top:0; left:0; 
+    width:100%; height:100%; background:rgba(0,0,0,0.5);">
+    <div style="background:#fff; padding:20px; max-width:600px; margin:50px auto; border-radius:8px;">
+      <h2 id="modalStudentName">Student Marks</h2>
+      <table border="1" width="100%">
+        <thead>
+          <tr>
+            <th>Subject</th>
+            <th>Marks</th>
+          </tr>
+        </thead>
+        <tbody id="studentMarksTable"></tbody>
+      </table>
+      <br>
+      <button onclick="closeModal()">Close</button>
+    </div>
+  </div>
+
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyB6lJ0qAoiFY72MKtzcTFCdVBaOv5-vqtA",
@@ -21,97 +63,65 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
-    const auth = getAuth(app);
 
-    // Sign in anonymously
-    signInAnonymously(auth).catch(console.error);
+    const marksForm = document.getElementById("marksForm");
+    const studentSelect = document.getElementById("studentSelect");
+    const marksList = document.getElementById("marksList");
 
-    const marksCol = collection(db, 'marks');
-    const studentsCol = collection(db, 'students');
-
-    const form = document.getElementById('marksForm');
-    const studentSelect = document.getElementById('studentSelect');
-    const rollNo = document.getElementById('rollNo');
-    const nameEl = document.getElementById('name');
-    const studentClass = document.getElementById('studentClass');
-    const subject = document.getElementById('subject');
-    const marks = document.getElementById('marks');
-    const tableBody = document.getElementById('marksTableBody');
-
-    let editingId = null;
+    let editId = null;
     let students = [];
 
-    // Fetch students live
-    onSnapshot(query(studentsCol, orderBy('rollNo')), (snap) => {
+    const studentsCol = collection(db, "students");
+    onSnapshot(query(studentsCol, orderBy("rollNo")), (snap) => {
       students = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       populateStudentSelect();
     });
 
     function populateStudentSelect() {
-      studentSelect.innerHTML = '<option value="">-- Select Student --</option>';
+      studentSelect.innerHTML = "<option value='' disabled selected>Select Student</option>";
       students.forEach(s => {
-        const opt = document.createElement('option');
+        const opt = document.createElement("option");
         opt.value = s.id;
-        opt.textContent = `${s.rollNo} — ${s.name} (${s.studentClass})`;
-        opt.dataset.roll = s.rollNo;
-        opt.dataset.name = s.name;
-        opt.dataset.class = s.studentClass;
+        opt.textContent = `${s.rollNo} - ${s.name} (Class ${s.studentClass})`;
         studentSelect.appendChild(opt);
       });
     }
-
-    studentSelect.addEventListener('change', () => {
-      const id = studentSelect.value;
-      if (!id) return;
-      const opt = studentSelect.selectedOptions[0];
-      rollNo.value = opt.dataset.roll || '';
-      nameEl.value = opt.dataset.name || '';
-      studentClass.value = opt.dataset.class || '';
-    });
 
     function getStudentDetailsById(id) {
       return students.find(s => s.id === id) || {};
     }
 
-    // Add or update marks
-    form.addEventListener('submit', async (e) => {
+    marksForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const docData = {
-        rollNo: rollNo.value,
-        name: nameEl.value,
-        studentClass: studentClass.value,
-        subject: subject.value,
-        marks: marks.value,
-        studentId: studentSelect.value || null, // link to students collection
-        updatedAt: serverTimestamp(),
-        createdBy: auth.currentUser?.uid || null
-      };
+      const studentId = studentSelect.value;
+      const subject = document.getElementById("subject").value;
+      const marks = document.getElementById("marks").value;
 
-      try {
-        if (editingId) {
-          await updateDoc(doc(db, 'marks', editingId), docData);
-          editingId = null;
-        } else {
-          await addDoc(marksCol, { ...docData, createdAt: serverTimestamp() });
-        }
-        form.reset();
-        studentSelect.value = '';
-      } catch (err) {
-        console.error('Error adding/updating marks:', err);
+      if (!studentId) return alert("Please select a student");
+      const student = getStudentDetailsById(studentId);
+
+      if (editId) {
+        await updateDoc(doc(db, "marks", editId), { studentId, subject, marks });
+        editId = null;
+      } else {
+        await addDoc(collection(db, "marks"), { studentId, subject, marks });
       }
+
+      marksForm.reset();
+      populateStudentSelect();
     });
 
-    // Display marks live
-    onSnapshot(query(marksCol, orderBy('createdAt', 'desc')), (snap) => {
-      tableBody.innerHTML = '';
+    const marksCol = collection(db, "marks");
+    onSnapshot(query(marksCol, orderBy("subject")), (snap) => {
+      marksList.innerHTML = "";
       snap.forEach(docSnap => {
         const d = docSnap.data();
         const student = getStudentDetailsById(d.studentId);
-        const roll = student.rollNo || d.rollNo;
-        const name = student.name || d.name;
-        const cls = student.studentClass || d.studentClass;
+        const roll = student.rollNo || "";
+        const name = student.name || "";
+        const cls = student.studentClass || "";
 
-        const tr = document.createElement('tr');
+        const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${roll}</td>
           <td>${name}</td>
@@ -119,68 +129,50 @@
           <td>${d.subject}</td>
           <td>${d.marks}</td>
           <td>
-            <button onclick="editMark('${docSnap.id}', '${roll}', '${name}', '${cls}', '${d.subject}', '${d.marks}', '${d.studentId || ''}')">Edit</button>
+            <button onclick="editMark('${docSnap.id}', '${d.studentId}', '${d.subject}', '${d.marks}')">Edit</button>
             <button onclick="deleteMark('${docSnap.id}')">Delete</button>
+            <button onclick="viewMarks('${d.studentId}')">View Marks</button>
           </td>`;
-        tableBody.appendChild(tr);
+        marksList.appendChild(tr);
       });
     });
 
-    // Expose edit/delete
-    window.editMark = (id, roll, name, cls, subj, mark, sid) => {
-      editingId = id;
-      rollNo.value = roll;
-      nameEl.value = name;
-      studentClass.value = cls;
-      subject.value = subj;
-      marks.value = mark;
-      studentSelect.value = sid || '';
-    };
+    window.editMark = function(id, studentId, subject, marks) {
+      editId = id;
+      studentSelect.value = studentId;
+      document.getElementById("subject").value = subject;
+      document.getElementById("marks").value = marks;
+    }
 
-    window.deleteMark = async (id) => {
-      if (confirm('Delete this record?')) {
-        await deleteDoc(doc(db, 'marks', id));
+    window.deleteMark = async function(id) {
+      if (confirm("Delete this record?")) {
+        await deleteDoc(doc(db, "marks", id));
       }
-    };
+    }
+
+    window.viewMarks = async function(studentId) {
+      const student = getStudentDetailsById(studentId);
+      document.getElementById("modalStudentName").innerText = 
+        `${student.name} (Class ${student.studentClass}, Roll No: ${student.rollNo})`;
+
+      const q = query(marksCol, where("studentId", "==", studentId));
+      const snap = await getDocs(q);
+
+      const tbody = document.getElementById("studentMarksTable");
+      tbody.innerHTML = "";
+      snap.forEach(docSnap => {
+        const d = docSnap.data();
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${d.subject}</td><td>${d.marks}</td>`;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById("marksModal").style.display = "block";
+    }
+
+    window.closeModal = function() {
+      document.getElementById("marksModal").style.display = "none";
+    }
   </script>
-</head>
-<body>
-  <h1>Student Marks App</h1>
-  <form id="marksForm">
-    <label>Select Student:</label>
-    <select id="studentSelect"></select><br>
-
-    <label>Roll No:</label>
-    <input id="rollNo" required><br>
-
-    <label>Name:</label>
-    <input id="name" required><br>
-
-    <label>Class:</label>
-    <input id="studentClass" required><br>
-
-    <label>Subject:</label>
-    <input id="subject" required><br>
-
-    <label>Marks:</label>
-    <input id="marks" required><br>
-
-    <button type="submit">Save Marks</button>
-  </form>
-
-  <h2>Marks List</h2>
-  <table border="1">
-    <thead>
-      <tr>
-        <th>Roll No</th>
-        <th>Name</th>
-        <th>Class</th>
-        <th>Subject</th>
-        <th>Marks</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody id="marksTableBody"></tbody>
-  </table>
 </body>
 </html>
