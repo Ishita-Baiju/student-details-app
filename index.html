@@ -98,7 +98,6 @@
       const marks = document.getElementById("marks").value;
 
       if (!studentId) return alert("Please select a student");
-      const student = getStudentDetailsById(studentId);
 
       if (editId) {
         await updateDoc(doc(db, "marks", editId), { studentId, subject, marks });
@@ -152,20 +151,27 @@
 
     window.viewMarks = async function(studentId) {
       const student = getStudentDetailsById(studentId);
-      document.getElementById("modalStudentName").innerText = 
-        `${student.name} (Class ${student.studentClass}, Roll No: ${student.rollNo})`;
+      document.getElementById("modalStudentName").innerText =
+        `${student.name || ""} (Class ${student.studentClass || ""}, Roll No: ${student.rollNo || ""})`;
 
       const q = query(marksCol, where("studentId", "==", studentId));
       const snap = await getDocs(q);
 
       const tbody = document.getElementById("studentMarksTable");
       tbody.innerHTML = "";
-      snap.forEach(docSnap => {
-        const d = docSnap.data();
+
+      if (snap.empty) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${d.subject}</td><td>${d.marks}</td>`;
+        tr.innerHTML = `<td colspan=\"2\">No marks found</td>`;
         tbody.appendChild(tr);
-      });
+      } else {
+        snap.forEach(docSnap => {
+          const d = docSnap.data();
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td>${d.subject}</td><td>${d.marks}</td>`;
+          tbody.appendChild(tr);
+        });
+      }
 
       document.getElementById("marksModal").style.display = "block";
     }
