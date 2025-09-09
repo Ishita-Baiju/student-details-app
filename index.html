@@ -7,7 +7,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyB6lJ0qAoiFY72MKtzcTFCdVBaOv5-vqtA",
@@ -69,6 +69,10 @@
       studentClass.value = opt.dataset.class || '';
     });
 
+    function getStudentDetailsById(id) {
+      return students.find(s => s.id === id) || {};
+    }
+
     // Add or update marks
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -102,15 +106,20 @@
       tableBody.innerHTML = '';
       snap.forEach(docSnap => {
         const d = docSnap.data();
+        const student = getStudentDetailsById(d.studentId);
+        const roll = student.rollNo || d.rollNo;
+        const name = student.name || d.name;
+        const cls = student.studentClass || d.studentClass;
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${d.rollNo}</td>
-          <td>${d.name}</td>
-          <td>${d.studentClass}</td>
+          <td>${roll}</td>
+          <td>${name}</td>
+          <td>${cls}</td>
           <td>${d.subject}</td>
           <td>${d.marks}</td>
           <td>
-            <button onclick="editMark('${docSnap.id}', '${d.rollNo}', '${d.name}', '${d.studentClass}', '${d.subject}', '${d.marks}', '${d.studentId || ''}')">Edit</button>
+            <button onclick="editMark('${docSnap.id}', '${roll}', '${name}', '${cls}', '${d.subject}', '${d.marks}', '${d.studentId || ''}')">Edit</button>
             <button onclick="deleteMark('${docSnap.id}')">Delete</button>
           </td>`;
         tableBody.appendChild(tr);
