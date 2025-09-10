@@ -7,7 +7,6 @@
   <style>
     body { font-family: Arial, sans-serif; margin: 18px; background:#f7fafc; color:#111827 }
     .card { background:white; padding:16px; border-radius:12px; box-shadow:0 6px 20px rgba(2,6,23,.07); max-width:980px; margin:0 auto }
-    form { display:grid; grid-template-columns: repeat(6, 1fr); gap:10px; }
     input, select, button { padding:8px; border-radius:8px; border:1px solid #e6edf3 }
     table { width:100%; border-collapse:collapse; margin-top:12px }
     th,td { padding:8px; border-bottom:1px solid #eef2f6 }
@@ -18,51 +17,24 @@
 </head>
 <body>
   <div class="card">
-    <h2>Student Details</h2>
-    <p class="muted">Add and manage student details here. These records are used by the Student Marks App.</p>
+    <h2>Student Details (CSV Import)</h2>
+    <p class="muted">Upload a CSV file with student details to add multiple students at once. Required headers: <b>scholarNo,name,fatherName,motherName,dob,class,category,nicId,mobile</b>.</p>
 
-    <form id="studentForm">
-      <div>
-        <label>Roll No</label>
-        <input id="s_rollNo" required />
-      </div>
-      <div>
-        <label>Full Name</label>
-        <input id="s_name" required />
-      </div>
-      <div>
-        <label>Class</label>
-        <input id="s_class" placeholder="e.g. 10A" required />
-      </div>
-      <div>
-        <label>Section</label>
-        <input id="s_section" />
-      </div>
-      <div>
-        <label>DOB</label>
-        <input id="s_dob" type="date" />
-      </div>
-      <div>
-        <label>Parent Contact</label>
-        <input id="s_parent" />
-      </div>
-
-      <div style="grid-column: span 6; display:flex; gap:8px; justify-content:flex-start; margin-top:6px;">
-        <button id="addStudentBtn" type="submit">Add Student</button>
-        <button id="resetStudentBtn" type="button">Reset</button>
-      </div>
-    </form>
+    <input type="file" id="csvFileInput" accept=".csv" />
+    <button id="uploadCsvBtn">Upload CSV</button>
 
     <table>
       <thead>
         <tr>
-          <th>Roll No</th>
+          <th>Scholar No</th>
           <th>Name</th>
-          <th>Class</th>
-          <th>Section</th>
+          <th>Father</th>
+          <th>Mother</th>
           <th>DOB</th>
-          <th>Parent</th>
-          <th class="right">Actions</th>
+          <th>Class</th>
+          <th>Category</th>
+          <th>NIC ID</th>
+          <th>Mobile</th>
         </tr>
       </thead>
       <tbody id="studentsTbody"></tbody>
@@ -104,8 +76,15 @@
     const addStudentBtn = document.getElementById('addStudentBtn');
     const resetStudentBtn = document.getElementById('resetStudentBtn');
 
+    // CSV UI
+    const fileInput = document.getElementById('csvFile');
+    const previewTbody = document.getElementById('csvPreviewTbody');
+    const importBtn = document.getElementById('importCsvBtn');
+    const downloadTemplate = document.getElementById('downloadTemplate');
+
     let students = [];
     let editStudentId = null;
+    let csvRows = []; // parsed rows ready to import
 
     function enterEdit(student){
       editStudentId = student.id;
@@ -194,6 +173,132 @@
       } else if (action === 'edit') {
         const s = students.find(x => x.id === id); if (s) enterEdit(s);
       }
+    });
+
+    // ---------------- CSV Import Helpers ----------------
+    // Simple CSV parser that handles quoted fields
+    function parseCSV(text) {
+      const rows = [];
+      let cur = '';
+      let row = [];
+      let inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (ch === '"') {
+          if (inQuotes && text[i+1] === '"') { cur += '"'; i++; }
+          else inQuotes = !inQuotes;
+        } else if (ch === ',' && !inQuotes) {
+          row.push(cur); cur = '';
+        } else if ((ch === '
+' || ch === '
+') && !inQuotes) {
+          // handle CRLF
+          if (cur !== '' || row.length) { row.push(cur); cur = ''; }
+          if (row.length) { rows.push(row); row = []; }
+          // skip following LF in CRLF
+          if (ch === '
+' && text[i+1] === '
+') i++; 
+        } else {
+          cur += ch;
+        }
+      }
+      if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+      return rows;
+    }
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target.result;
+        const rowsParsed = parseCSV(text);
+        if (!rowsParsed.length) return alert('CSV appears empty');
+
+        const headers = rowsParsed[0].map(h => h.trim());
+        const expected = ['scholar_no','name','father_name','mother_name','dob','class','section','category','nic_id','mobile_no'];
+        // show warning if headers don't match exactly but still try to map by name
+        const headerMap = {};
+        headers.forEach((h,i) => headerMap[h.toLowerCase()] = i);
+
+        csvRows = [];
+        previewTbody.innerHTML = '';
+        for (let r = 1; r < rowsParsed.length; r++) {
+          const row = rowsParsed[r];
+          if (row.length === 1 && row[0].trim() === '') continue; // skip empty lines
+          const obj = {
+            scholarNo: (row[headerMap['scholar_no']] || '').trim(),
+            name: (row[headerMap['name']] || '').trim(),
+            fatherName: (row[headerMap['father_name']] || '').trim(),
+            motherName: (row[headerMap['mother_name']] || '').trim(),
+            dob: (row[headerMap['dob']] || '').trim(),
+            studentClass: (row[headerMap['class']] || '').trim(),
+            section: (row[headerMap['section']] || '').trim(),
+            category: (row[headerMap['category']] || '').trim(),
+            nicId: (row[headerMap['nic_id']] || '').trim(),
+            mobileNo: (row[headerMap['mobile_no']] || '').trim()
+          };
+          csvRows.push(obj);
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${obj.scholarNo}</td><td>${obj.name}</td><td>${obj.fatherName}</td><td>${obj.motherName}</td><td>${obj.dob}</td><td>${obj.studentClass}</td><td>${obj.category}</td><td>${obj.nicId}</td><td>${obj.mobileNo}</td>`;
+          previewTbody.appendChild(tr);
+        }
+
+        if (!csvRows.length) alert('No valid rows found in CSV');
+      };
+      reader.readAsText(file);
+    });
+
+    // Download CSV template
+    downloadTemplate.addEventListener('click', (e) => {
+      e.preventDefault();
+      const headers = ['scholar_no','name','father_name','mother_name','dob','class','section','category','nic_id','mobile_no'];
+      const example = ['101','Rahul Sharma','Ajay Sharma','Sunita Sharma','2010-05-12','10A','A','General','ABCDE1234','9876543210'];
+      const csv = headers.join(',') + '
+' + example.join(',');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'students_template.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    // Import CSV rows into Firestore
+    importBtn.addEventListener('click', async () => {
+      if (!csvRows.length) return alert('No CSV rows to import.');
+      if (!confirm(`Import ${csvRows.length} students to Firestore?`)) return;
+
+      importBtn.disabled = true;
+      let imported = 0;
+      for (const r of csvRows) {
+        const payload = {
+          scholarNo: r.scholarNo || '',
+          rollNo: r.scholarNo || '',
+          name: r.name || '',
+          fatherName: r.fatherName || '',
+          motherName: r.motherName || '',
+          dob: r.dob || '',
+          studentClass: r.studentClass || '',
+          section: r.section || '',
+          category: r.category || '',
+          nicId: r.nicId || '',
+          mobileNo: r.mobileNo || '',
+          parentContact: r.mobileNo || '',
+          createdAt: serverTimestamp()
+        };
+        try {
+          await addDoc(studentsCol, payload);
+          imported++;
+        } catch (err) {
+          console.error('Import row failed', r, err);
+        }
+      }
+      importBtn.disabled = false;
+      alert(`Imported ${imported} of ${csvRows.length} students.`);
+      // clear preview
+      csvRows = [];
+      previewTbody.innerHTML = '';
+      fileInput.value = '';
     });
   </script>
 </body>
